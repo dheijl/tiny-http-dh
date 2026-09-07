@@ -185,10 +185,10 @@ impl FromStr for Header {
         let mut elems = input.splitn(2, ':');
 
         let field = elems.next().and_then(|f| f.parse().ok()).ok_or(())?;
-        let value = elems
-            .next()
-            .and_then(|v| AsciiString::from_ascii(v.trim()).ok())
-            .ok_or(())?;
+
+        let mut value = elems.next().ok_or(())?.trim().as_bytes().to_vec();
+        reject_ascii_control(&mut value);
+        let value = AsciiString::from_ascii(value).map_err(|_| ())?;
 
         Ok(Header { field, value })
     }
@@ -206,11 +206,24 @@ impl Display for Header {
 #[derive(Debug, Clone, Eq)]
 pub struct HeaderField(AsciiString);
 
+/// Sets the high bit on any ASCII control byte, so that
+/// `AsciiString::from_ascii` rejects it as non-ASCII on its own instead of
+/// silently letting it through (see CVE-2026-66753).
+fn reject_ascii_control(bytes: &mut [u8]) {
+    for b in bytes.iter_mut() {
+        if b.is_ascii_control() {
+            *b |= 0x80;
+        }
+    }
+}
+
 impl HeaderField {
-    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<B>>
+    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<Vec<u8>>>
     where
         B: Into<Vec<u8>> + AsRef<[u8]>,
     {
+        let mut bytes: Vec<u8> = bytes.into();
+        reject_ascii_control(&mut bytes);
         AsciiString::from_ascii(bytes).map(HeaderField)
     }
 
@@ -230,7 +243,7 @@ impl FromStr for HeaderField {
         if s.contains(char::is_whitespace) {
             Err(())
         } else {
-            AsciiString::from_ascii(s).map(HeaderField).map_err(|_| ())
+            HeaderField::from_bytes(s.as_bytes()).map_err(|_| ())
         }
     }
 }
@@ -395,7 +408,7 @@ impl From<(u8, u8)> for HTTPVersion {
 
 #[cfg(test)]
 mod test {
-    use super::Header;
+    use super::{Header, HeaderField};
     use httpdate::HttpDate;
     use std::time::{Duration, SystemTime};
 
@@ -436,5 +449,25 @@ mod test {
         assert!("Transfer-Encoding: chunked".parse::<Header>().is_ok());
         assert!("Transfer-Encoding: chunked ".parse::<Header>().is_ok());
         assert!("Transfer-Encoding:   chunked ".parse::<Header>().is_ok());
+    }
+
+    // CVE-2026-66753: a HeaderField containing a control character must be rejected.
+    #[test]
+    fn test_header_field_rejects_control_chars() {
+        assert!(HeaderField::from_bytes(&b"X-Fo\x00o"[..]).is_err());
+        assert!(HeaderField::from_bytes(&b"X-Foo\x1b"[..]).is_err());
+        assert!(HeaderField::from_bytes(&b"X-Foo\x7f"[..]).is_err());
+        assert!(HeaderField::from_bytes(&b"X-Foo"[..]).is_ok());
+    }
+
+    // CVE-2026-66753: `Header::from_str` must reject control characters in
+    // both the field name and the value, not just via `HeaderField::from_bytes`.
+    #[test]
+    fn test_header_from_str_rejects_control_chars() {
+        assert!("X-Fo\x00o: bar".parse::<Header>().is_err());
+        assert!("X-Foo\x1b: bar".parse::<Header>().is_err());
+        assert!("X-Foo: b\x00ar".parse::<Header>().is_err());
+        assert!("X-Foo: bar\x1b".parse::<Header>().is_err());
+        assert!("X-Foo: bar".parse::<Header>().is_ok());
     }
 }
