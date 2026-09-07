@@ -1,4 +1,4 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 use std::io::{Read, Write};
 use std::net::Shutdown;
@@ -106,9 +106,9 @@ fn custom_content_type_response_header() {
     let request = server.recv().unwrap();
     request
         .respond(
-            tiny_http::Response::from_string("{\"custom\": \"Content-Type\"}").with_header(
+            tiny_http_dh::Response::from_string("{\"custom\": \"Content-Type\"}").with_header(
                 "Content-Type: application/json"
-                    .parse::<tiny_http::Header>()
+                    .parse::<tiny_http_dh::Header>()
                     .unwrap(),
             ),
         )

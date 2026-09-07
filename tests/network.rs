@@ -1,4 +1,4 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -100,7 +100,7 @@ fn pipelining_test() {
 
 #[test]
 fn server_crash_results_in_response() {
-    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+    let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();
     let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
 
@@ -137,7 +137,7 @@ fn responses_reordered() {
         let rq2 = server.recv().unwrap();
 
         thread::spawn(move || {
-            rq2.respond(tiny_http::Response::from_string(
+            rq2.respond(tiny_http_dh::Response::from_string(
                 "second request".to_owned(),
             ))
             .unwrap();
@@ -146,8 +146,10 @@ fn responses_reordered() {
         thread::sleep(Duration::from_millis(100));
 
         thread::spawn(move || {
-            rq1.respond(tiny_http::Response::from_string("first request".to_owned()))
-                .unwrap();
+            rq1.respond(tiny_http_dh::Response::from_string(
+                "first request".to_owned(),
+            ))
+            .unwrap();
         });
     });
 
@@ -170,7 +172,7 @@ fn no_transfer_encoding_on_204() {
     thread::spawn(move || {
         let rq = server.recv().unwrap();
 
-        let resp = tiny_http::Response::empty(tiny_http::StatusCode(204));
+        let resp = tiny_http_dh::Response::empty(tiny_http_dh::StatusCode(204));
         rq.respond(resp).unwrap();
     });
 
@@ -185,7 +187,7 @@ fn no_transfer_encoding_on_204() {
 #[test]
 fn connection_timeout() {
     let (server, mut client) = {
-        let server = tiny_http::ServerBuilder::new()
+        let server = tiny_http_dh::ServerBuilder::new()
             .with_client_connections_timeout(3000)
             .with_random_port().build().unwrap();
         let port = server.server_addr().port();
@@ -216,7 +218,7 @@ fn connection_timeout() {
 
 #[test]
 fn chunked_threshold() {
-    let resp = tiny_http::Response::from_string("test".to_string());
+    let resp = tiny_http_dh::Response::from_string("test".to_string());
     assert_eq!(resp.chunked_threshold(), 32768);
     assert_eq!(resp.with_chunked_threshold(42).chunked_threshold(), 42);
 }

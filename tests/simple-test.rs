@@ -1,4 +1,4 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 use std::io::{Read, Write};
 
@@ -15,10 +15,12 @@ fn basic_handling() {
     .unwrap();
 
     let request = server.recv().unwrap();
-    assert!(*request.method() == tiny_http::Method::Get);
+    assert!(*request.method() == tiny_http_dh::Method::Get);
     //assert!(request.url() == "/");
     request
-        .respond(tiny_http::Response::from_string("hello world".to_owned()))
+        .respond(tiny_http_dh::Response::from_string(
+            "hello world".to_owned(),
+        ))
         .unwrap();
 
     server.try_recv().unwrap();

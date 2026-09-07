@@ -1,4 +1,4 @@
-use crate::{request::new_request, HTTPVersion, Header, HeaderField, Method, Request};
+use crate::{HTTPVersion, Header, HeaderField, Method, Request, request::new_request};
 use ascii::AsciiString;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -9,7 +9,7 @@ use std::str::FromStr;
 /// with no headers. To create a `TestRequest` with different parameters, use the builder pattern:
 ///
 /// ```
-/// # use tiny_http::{Method, TestRequest};
+/// # use tiny_http_dh::{Method, TestRequest};
 /// let request = TestRequest::new()
 ///     .with_method(Method::Post)
 ///     .with_path("/api/widgets")
@@ -19,7 +19,7 @@ use std::str::FromStr;
 /// Then, convert the `TestRequest` into a real `Request` and pass it to the server under test:
 ///
 /// ```
-/// # use tiny_http::{Method, Request, Response, Server, StatusCode, TestRequest};
+/// # use tiny_http_dh::{Method, Request, Response, Server, StatusCode, TestRequest};
 /// # use std::io::Cursor;
 /// # let request = TestRequest::new()
 /// #     .with_method(Method::Post)

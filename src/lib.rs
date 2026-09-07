@@ -9,7 +9,7 @@
 //! occupied).
 //!
 //! ```no_run
-//! let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
 //! ```
 //!
 //! A newly-created `Server` will immediately start listening for incoming connections and HTTP
@@ -21,7 +21,7 @@
 //! This function returns an `IoResult<Request>`, so you need to handle the possible errors.
 //!
 //! ```no_run
-//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
 //!
 //! loop {
 //!     // blocks until the next request is received
@@ -41,7 +41,7 @@
 //! ```no_run
 //! # use std::sync::Arc;
 //! # use std::thread;
-//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
 //! let server = Arc::new(server);
 //! let mut guards = Vec::with_capacity(4);
 //!
@@ -74,7 +74,7 @@
 //! ```no_run
 //! # use std::fs::File;
 //! # use std::path::Path;
-//! let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
+//! let response = tiny_http_dh::Response::from_file(File::open(&Path::new("image.png")).unwrap());
 //! ```
 //!
 //! All that remains to do is call `request.respond()`:
@@ -82,9 +82,9 @@
 //! ```no_run
 //! # use std::fs::File;
 //! # use std::path::Path;
-//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
 //! # let request = server.recv().unwrap();
-//! # let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
+//! # let response = tiny_http_dh::Response::from_file(File::open(&Path::new("image.png")).unwrap());
 //! let _ = request.respond(response);
 //! ```
 #![forbid(unsafe_code)]
@@ -103,10 +103,10 @@ use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
 use std::io::Result as IoResult;
 use std::net::{Shutdown, TcpStream, ToSocketAddrs};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -163,12 +163,6 @@ impl From<Request> for Message {
         Message::NewRequest(rq)
     }
 }
-
-// this trait is to make sure that Server implements Share and Send
-#[doc(hidden)]
-trait MustBeShareDummy: Sync + Send {}
-#[doc(hidden)]
-impl MustBeShareDummy for Server {}
 
 pub struct IncomingRequests<'a> {
     server: &'a Server,

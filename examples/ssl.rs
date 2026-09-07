@@ -1,4 +1,4 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 #[cfg(not(any(
     feature = "ssl-openssl",
@@ -15,11 +15,11 @@ fn main() {
     feature = "ssl-native-tls"
 ))]
 fn main() {
-    use tiny_http::{Response, Server};
+    use tiny_http_dh::{Response, Server};
 
     let server = Server::https(
         "0.0.0.0:8000",
-        tiny_http::SslConfig {
+        tiny_http_dh::SslConfig {
             certificate: include_bytes!("ssl-cert.pem").to_vec(),
             private_key: include_bytes!("ssl-key.pem").to_vec(),
         },

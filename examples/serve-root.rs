@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 extern crate ascii;
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 fn get_content_type(path: &Path) -> &'static str {
     let extension = match path.extension() {
@@ -25,7 +25,7 @@ fn get_content_type(path: &Path) -> &'static str {
 }
 
 fn main() {
-    let server = tiny_http::Server::http("0.0.0.0:8000").unwrap();
+    let server = tiny_http_dh::Server::http("0.0.0.0:8000").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();
     println!("Now listening on port {}", port);
 
@@ -42,16 +42,16 @@ fn main() {
         let file = fs::File::open(&path);
 
         if file.is_ok() {
-            let response = tiny_http::Response::from_file(file.unwrap());
+            let response = tiny_http_dh::Response::from_file(file.unwrap());
 
-            let response = response.with_header(tiny_http::Header {
+            let response = response.with_header(tiny_http_dh::Header {
                 field: "Content-Type".parse().unwrap(),
                 value: AsciiString::from_ascii(get_content_type(&path)).unwrap(),
             });
 
             let _ = rq.respond(response);
         } else {
-            let rep = tiny_http::Response::new_empty(tiny_http::StatusCode(404));
+            let rep = tiny_http_dh::Response::new_empty(tiny_http_dh::StatusCode(404));
             let _ = rq.respond(rep);
         }
     }

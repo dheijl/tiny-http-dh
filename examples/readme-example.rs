@@ -1,7 +1,7 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 fn main() {
-    use tiny_http::{Response, Server};
+    use tiny_http_dh::{Response, Server};
 
     let server = Server::http("0.0.0.0:8000").unwrap();
 

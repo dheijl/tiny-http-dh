@@ -1,13 +1,13 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
-use std::io::{copy, Read, Write};
+use std::io::{Read, Write, copy};
 use std::net::{Shutdown, TcpStream};
 use std::ops::Deref;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
-use tiny_http::{Response, Server};
+use tiny_http_dh::{Response, Server};
 
 /// Stream that produces bytes very slowly
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -145,10 +145,12 @@ mod prompt_responses {
         let server = Server::http("0.0.0.0:0").unwrap();
         let client = TcpStream::connect(server.server_addr().to_ip().unwrap()).unwrap();
 
-        spawn(move || loop {
-            // server attempts to respond immediately
-            let req = server.recv().unwrap();
-            req.respond(Response::empty(400)).unwrap();
+        spawn(move || {
+            loop {
+                // server attempts to respond immediately
+                let req = server.recv().unwrap();
+                req.respond(Response::empty(400)).unwrap();
+            }
         });
 
         let client = Arc::new(client);

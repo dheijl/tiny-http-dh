@@ -37,7 +37,7 @@ tiny_http = "0.11"
 ### Usage
 
 ```rust
-use tiny_http::{Server, Response};
+use tiny_http_dh::{Server, Response};
 
 let server = Server::http("0.0.0.0:8000").unwrap();
 

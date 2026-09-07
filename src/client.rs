@@ -7,10 +7,10 @@ use std::io::{BufReader, BufWriter, ErrorKind, Read};
 use std::net::SocketAddr;
 use std::str::FromStr;
 
+use crate::Request;
 use crate::common::{HTTPVersion, Method};
 use crate::util::RefinedTcpStream;
 use crate::util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
-use crate::Request;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
@@ -192,7 +192,7 @@ impl Iterator for ClientConnection {
                         .raw_print(writer, HTTPVersion(1, 1), &[], false, None)
                         .ok();
                     return None; // we don't know where the next request would start,
-                                 // se we have to close
+                    // se we have to close
                 }
 
                 Err(ReadError::WrongHeader(ver)) => {
@@ -200,7 +200,7 @@ impl Iterator for ClientConnection {
                     let response = Response::new_empty(StatusCode(400));
                     response.raw_print(writer, ver, &[], false, None).ok();
                     return None; // we don't know where the next request would start,
-                                 // se we have to close
+                    // se we have to close
                 }
 
                 Err(ReadError::ReadIoError(ref err)) if err.kind() == ErrorKind::TimedOut => {

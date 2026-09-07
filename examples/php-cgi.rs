@@ -1,5 +1,5 @@
 extern crate ascii;
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 use ascii::AsAsciiStr;
 
@@ -11,7 +11,7 @@ Usage: php-cgi <php-script-path>
 
 */
 
-fn handle(rq: tiny_http::Request, script: &str) {
+fn handle(rq: tiny_http_dh::Request, script: &str) {
     use std::io::Write;
     use std::process::Command;
 
@@ -78,7 +78,7 @@ fn main() {
         args.nth(1).unwrap()
     };
 
-    let server = Arc::new(tiny_http::Server::http("0.0.0.0:9975").unwrap());
+    let server = Arc::new(tiny_http_dh::Server::http("0.0.0.0:9975").unwrap());
     println!("Now listening on port 9975");
 
     let num_cpus = 4; // TODO: dynamically generate this value

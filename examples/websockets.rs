@@ -1,6 +1,6 @@
 extern crate rustc_serialize;
 extern crate sha1;
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 use std::io::Cursor;
 use std::io::Read;
@@ -8,8 +8,8 @@ use std::thread::spawn;
 
 use rustc_serialize::base64::{Config, Newline, Standard, ToBase64};
 
-fn home_page(port: u16) -> tiny_http::Response<Cursor<Vec<u8>>> {
-    tiny_http::Response::from_string(format!(
+fn home_page(port: u16) -> tiny_http_dh::Response<Cursor<Vec<u8>>> {
+    tiny_http_dh::Response::from_string(format!(
         "
         <script type=\"text/javascript\">
         var socket = new WebSocket(\"ws://localhost:{}/\", \"ping\");
@@ -33,7 +33,7 @@ fn home_page(port: u16) -> tiny_http::Response<Cursor<Vec<u8>>> {
     ))
     .with_header(
         "Content-type: text/html"
-            .parse::<tiny_http::Header>()
+            .parse::<tiny_http_dh::Header>()
             .unwrap(),
     )
 }
@@ -61,7 +61,7 @@ fn convert_key(input: &str) -> String {
 }
 
 fn main() {
-    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+    let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();
 
     println!("Server started");
@@ -101,7 +101,7 @@ fn main() {
                 .map(|h| h.value.clone())
             {
                 None => {
-                    let response = tiny_http::Response::new_empty(tiny_http::StatusCode(400));
+                    let response = tiny_http_dh::Response::new_empty(tiny_http_dh::StatusCode(400));
                     request.respond(response).expect("Responded");
                     return;
                 }
@@ -109,17 +109,25 @@ fn main() {
             };
 
             // building the "101 Switching Protocols" response
-            let response = tiny_http::Response::new_empty(tiny_http::StatusCode(101))
-                .with_header("Upgrade: websocket".parse::<tiny_http::Header>().unwrap())
-                .with_header("Connection: Upgrade".parse::<tiny_http::Header>().unwrap())
+            let response = tiny_http_dh::Response::new_empty(tiny_http_dh::StatusCode(101))
+                .with_header(
+                    "Upgrade: websocket"
+                        .parse::<tiny_http_dh::Header>()
+                        .unwrap(),
+                )
+                .with_header(
+                    "Connection: Upgrade"
+                        .parse::<tiny_http_dh::Header>()
+                        .unwrap(),
+                )
                 .with_header(
                     "Sec-WebSocket-Protocol: ping"
-                        .parse::<tiny_http::Header>()
+                        .parse::<tiny_http_dh::Header>()
                         .unwrap(),
                 )
                 .with_header(
                     format!("Sec-WebSocket-Accept: {}", convert_key(key.as_str()))
-                        .parse::<tiny_http::Header>()
+                        .parse::<tiny_http_dh::Header>()
                         .unwrap(),
                 );
 

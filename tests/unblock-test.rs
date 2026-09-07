@@ -1,11 +1,11 @@
-extern crate tiny_http;
+extern crate tiny_http_dh;
 
 use std::sync::Arc;
 use std::thread;
 
 #[test]
 fn unblock_server() {
-    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+    let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
     let s = Arc::new(server);
 
     let s1 = s.clone();
@@ -17,7 +17,7 @@ fn unblock_server() {
 
 #[test]
 fn unblock_threads() {
-    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+    let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
     let s = Arc::new(server);
 
     let s1 = s.clone();

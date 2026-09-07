@@ -1,15 +1,14 @@
 [package]
-name = "tiny_http"
+name = "tiny_http_dh"
 version = "0.12.0"
-authors = ["pierre.krieger1708@gmail.com",
-           "Corey Farwell <coreyf@rwell.org>"]
+authors = ["pierre.krieger1708@gmail.com", "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
 documentation = "https://tiny-http.github.io/tiny-http/tiny_http/index.html"
 keywords = ["http", "server", "web"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/tiny-http/tiny-http"
-edition = "2018"
-rust-version = "1.57"
+repository = "https://github.com/dheijl/tiny-http-dh"
+edition = "2024"
+rust-version = "1.98.1"
 
 [features]
 default = ["log"]
@@ -34,6 +33,11 @@ native-tls = { version = "0.2", optional = true }
 rustc-serialize = "0.3"
 sha1 = "0.6.0"
 fdlimit = "0.1"
+criterion = "0.5"
+
+[[bench]]
+name = "bench"
+harness = false
 
 [package.metadata.docs.rs]
 # Enable just one SSL implementation
