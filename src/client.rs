@@ -43,6 +43,9 @@ enum ReadError {
     WrongHeader(HTTPVersion),
     /// the client sent an unrecognized `Expect` header
     ExpectationFailed(HTTPVersion),
+    /// the client sent a `Transfer-Encoding` header tiny-http cannot safely
+    /// interpret, or both `Transfer-Encoding` and `Content-Length`
+    InvalidTransferEncoding(HTTPVersion),
     ReadIoError(IoError),
 }
 
@@ -166,6 +169,9 @@ impl ClientConnection {
                 request::RequestCreationError::ExpectationFailed => {
                     ReadError::ExpectationFailed(version)
                 }
+                request::RequestCreationError::InvalidTransferEncoding => {
+                    ReadError::InvalidTransferEncoding(version)
+                }
             }
         })?;
 
@@ -223,6 +229,15 @@ impl Iterator for ClientConnection {
                     let response = Response::new_empty(StatusCode(417));
                     response.raw_print(writer, ver, &[], true, None).ok();
                     return None; // TODO: should be recoverable, but needs handling in case of body
+                }
+
+                Err(ReadError::InvalidTransferEncoding(ver)) => {
+                    let writer = self.sink.next().unwrap();
+                    let response = Response::new_empty(StatusCode(400));
+                    response.raw_print(writer, ver, &[], false, None).ok();
+                    return None; // the message framing is ambiguous, so we
+                    // cannot safely process any further data on this
+                    // connection (see CVE-2026-66752)
                 }
 
                 Err(ReadError::ReadIoError(_)) => return None,
