@@ -45,7 +45,7 @@ fn big_response_reader() -> Reader {
 fn identity_served(r: &mut Reader) -> tiny_http_dh::Response<&mut Reader> {
     let body_len = r.inner.get_ref().len();
     tiny_http_dh::Response::empty(200)
-        .with_chunked_threshold(std::usize::MAX)
+        .with_chunked_threshold(usize::MAX)
         .with_data(r, Some(body_len))
 }
 

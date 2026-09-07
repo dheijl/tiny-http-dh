@@ -24,18 +24,18 @@ use std::time::SystemTime;
 /// Some headers have special behaviors:
 ///
 ///  - `Content-Encoding`: If you define this header, the library
-///     will assume that the data from the `Read` object has the specified encoding
-///     and will just pass-through.
+///    will assume that the data from the `Read` object has the specified encoding
+///    and will just pass-through.
 ///
 ///  - `Content-Length`: The length of the data should be set manually
-///     using the `Reponse` object's API. Attempting to set the value of this
-///     header will be equivalent to modifying the size of the data but the header
-///     itself may not be present in the final result.
+///    using the `Reponse` object's API. Attempting to set the value of this
+///    header will be equivalent to modifying the size of the data but the header
+///    itself may not be present in the final result.
 ///
 ///  - `Content-Type`: You may only set this header to one value at a time. If you
-///     try to set it more than once, the existing value will be overwritten. This
-///     behavior differs from the default for most headers, which is to allow them to
-///     be set multiple times in the same response.
+///    try to set it more than once, the existing value will be overwritten. This
+///    behavior differs from the default for most headers, which is to allow them to
+///    be set multiple times in the same response.
 ///
 pub struct Response<R> {
     reader: R,
@@ -174,7 +174,7 @@ fn choose_transfer_encoding(
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
     if entity_length
         .as_ref()
-        .map_or(true, |val| *val >= chunked_threshold)
+        .is_none_or(|val| *val >= chunked_threshold)
     {
         return TransferEncoding::Chunked;
     }
@@ -271,15 +271,14 @@ where
 
             return;
         // if the header is Content-Type and it's already set, overwrite it
-        } else if header.field.equiv("Content-Type") {
-            if let Some(content_type_header) = self
+        } else if header.field.equiv("Content-Type")
+            && let Some(content_type_header) = self
                 .headers
                 .iter_mut()
                 .find(|h| h.field.equiv("Content-Type"))
-            {
-                content_type_header.value = header.value;
-                return;
-            }
+        {
+            content_type_header.value = header.value;
+            return;
         }
 
         self.headers.push(header);

@@ -85,6 +85,10 @@ impl ClientConnection {
         let mut prev_byte_was_cr = false;
 
         loop {
+            // `next_header_source` wraps a `BufReader`, so this doesn't issue a
+            // syscall per byte despite the lint; `SequentialReader` doesn't
+            // implement `BufRead` to let us use a buffered line reader directly.
+            #[allow(clippy::unbuffered_bytes)]
             let byte = self.next_header_source.by_ref().bytes().next();
 
             let byte = match byte {

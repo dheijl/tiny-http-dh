@@ -418,7 +418,7 @@ impl Server {
         match self.messages.pop() {
             Some(Message::Error(err)) => Err(err),
             Some(Message::NewRequest(rq)) => Ok(rq),
-            None => Err(IoError::new(IoErrorKind::Other, "thread unblocked")),
+            None => Err(IoError::other("thread unblocked")),
         }
     }
 
@@ -473,10 +473,10 @@ impl Drop for Server {
         }
 
         #[cfg(unix)]
-        if let ListenAddr::Unix(addr) = &self.listening_addr {
-            if let Some(path) = addr.as_pathname() {
-                let _ = std::fs::remove_file(path);
-            }
+        if let ListenAddr::Unix(addr) = &self.listening_addr
+            && let Some(path) = addr.as_pathname()
+        {
+            let _ = std::fs::remove_file(path);
         }
     }
 }

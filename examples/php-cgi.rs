@@ -1,15 +1,15 @@
-extern crate ascii;
-extern crate tiny_http_dh;
-
-use ascii::AsAsciiStr;
-
-/**!
+/*!
 
 A web server that redirects every request to a PHP script.
 
 Usage: php-cgi <php-script-path>
 
 */
+
+extern crate ascii;
+extern crate tiny_http_dh;
+
+use ascii::AsAsciiStr;
 
 fn handle(rq: tiny_http_dh::Request, script: &str) {
     use std::io::Write;
@@ -28,7 +28,7 @@ fn handle(rq: tiny_http_dh::Request, script: &str) {
         .env("GATEWAY_INTERFACE", "CGI/1.1")
         .env("PATH_INFO", "")
         .env("PATH_TRANSLATED", "")
-        .env("QUERY_STRING", format!("{}", rq.url()))
+        .env("QUERY_STRING", rq.url())
         .env("REMOTE_ADDR", format!("{}", rq.remote_addr().unwrap()))
         .env("REMOTE_HOST", "")
         .env("REMOTE_IDENT", "")

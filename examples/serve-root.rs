@@ -39,14 +39,14 @@ fn main() {
 
         let url = rq.url().to_string();
         let path = Path::new(&url);
-        let file = fs::File::open(&path);
+        let file = fs::File::open(path);
 
-        if file.is_ok() {
-            let response = tiny_http_dh::Response::from_file(file.unwrap());
+        if let Ok(file) = file {
+            let response = tiny_http_dh::Response::from_file(file);
 
             let response = response.with_header(tiny_http_dh::Header {
                 field: "Content-Type".parse().unwrap(),
-                value: AsciiString::from_ascii(get_content_type(&path)).unwrap(),
+                value: AsciiString::from_ascii(get_content_type(path)).unwrap(),
             });
 
             let _ = rq.respond(response);

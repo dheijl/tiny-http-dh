@@ -416,7 +416,7 @@ mod test {
     fn test_parse_header() {
         let header: Header = "Content-Type: text/html".parse().unwrap();
 
-        assert!(header.field.equiv(&"content-type"));
+        assert!(header.field.equiv("content-type"));
         assert!(header.value.as_str() == "text/html");
 
         assert!("hello world".parse::<Header>().is_err());
@@ -433,7 +433,7 @@ mod test {
     fn test_parse_header_with_doublecolon() {
         let header: Header = "Time: 20: 34".parse().unwrap();
 
-        assert!(header.field.equiv(&"time"));
+        assert!(header.field.equiv("time"));
         assert!(header.value.as_str() == "20: 34");
     }
 
