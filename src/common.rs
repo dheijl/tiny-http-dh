@@ -169,6 +169,8 @@ impl Header {
         B2: Into<Vec<u8>> + AsRef<[u8]>,
     {
         let header = HeaderField::from_bytes(header).or(Err(()))?;
+        let mut value: Vec<u8> = value.into();
+        reject_ascii_control(&mut value);
         let value = AsciiString::from_ascii(value).or(Err(()))?;
 
         Ok(Header {
@@ -469,5 +471,14 @@ mod test {
         assert!("X-Foo: b\x00ar".parse::<Header>().is_err());
         assert!("X-Foo: bar\x1b".parse::<Header>().is_err());
         assert!("X-Foo: bar".parse::<Header>().is_ok());
+    }
+
+    // CVE-2026-66753: `Header::from_bytes` (the response-building constructor)
+    // must also reject CRLF injected into the value, per the advisory's PoC.
+    #[test]
+    fn test_header_from_bytes_rejects_crlf_in_value() {
+        let evil = b"a\r\nX-Injected: yes";
+        assert!(Header::from_bytes(&b"X-Echo"[..], &evil[..]).is_err());
+        assert!(Header::from_bytes(&b"X-Echo"[..], &b"safe"[..]).is_ok());
     }
 }
