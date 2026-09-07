@@ -24,7 +24,7 @@ fn sequential_requests(c: &mut Criterion) {
 }
 
 fn parallel_requests(c: &mut Criterion) {
-    fdlimit::raise_fd_limit();
+    let _ = fdlimit::raise_fd_limit();
 
     let server = tiny_http_dh::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();

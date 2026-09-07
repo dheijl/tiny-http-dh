@@ -41,7 +41,7 @@ fn home_page(port: u16) -> tiny_http_dh::Response<Cursor<Vec<u8>>> {
 /// Turns a Sec-WebSocket-Key into a Sec-WebSocket-Accept.
 /// Feel free to copy-paste this function, but please use a better error handling.
 fn convert_key(input: &str) -> String {
-    use sha1::Sha1;
+    use sha1::{Digest, Sha1};
 
     let mut input = input.to_string().into_bytes();
     let mut bytes = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -52,7 +52,7 @@ fn convert_key(input: &str) -> String {
     let mut sha1 = Sha1::new();
     sha1.update(&input);
 
-    sha1.digest().bytes().to_base64(Config {
+    sha1.finalize().to_base64(Config {
         char_set: Standard,
         pad: true,
         line_length: None,

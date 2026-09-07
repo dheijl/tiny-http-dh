@@ -69,33 +69,18 @@ impl RustlsContext {
         certificates: Vec<u8>,
         private_key: Zeroizing<Vec<u8>>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let certificate_chain: Vec<rustls::Certificate> =
-            rustls_pemfile::certs(&mut certificates.as_slice())?
-                .into_iter()
-                .map(|bytes| rustls::Certificate(bytes))
-                .collect();
+        let certificate_chain = rustls_pemfile::certs(&mut certificates.as_slice())
+            .collect::<Result<Vec<_>, _>>()?;
 
         if certificate_chain.is_empty() {
             return Err("Couldn't extract certificate chain from config.".into());
         }
 
-        let private_key = rustls::PrivateKey({
-            let pkcs8_keys = rustls_pemfile::pkcs8_private_keys(
-                &mut private_key.clone().as_slice(),
-            )
-            .expect("file contains invalid pkcs8 private key (encrypted keys are not supported)");
-
-            if let Some(pkcs8_key) = pkcs8_keys.first() {
-                pkcs8_key.clone()
-            } else {
-                let rsa_keys = rustls_pemfile::rsa_private_keys(&mut private_key.as_slice())
-                    .expect("file contains invalid rsa private key");
-                rsa_keys[0].clone()
-            }
-        });
+        let private_key = rustls_pemfile::private_key(&mut private_key.as_slice())
+            .map_err(|_| "file contains invalid private key")?
+            .ok_or("no private key found in file")?;
 
         let tls_conf = rustls::ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(certificate_chain, private_key)?;
 
