@@ -29,6 +29,13 @@ impl RustlsStream {
             .sock
             .shutdown(how)
     }
+
+    /// Sends a TLS `close_notify` alert to the peer, best-effort.
+    pub(crate) fn close_notify(&mut self) {
+        let mut guard = self.0.lock().expect("Failed to lock SSL stream mutex");
+        guard.conn.send_close_notify();
+        let _ = guard.flush();
+    }
 }
 
 impl Clone for RustlsStream {

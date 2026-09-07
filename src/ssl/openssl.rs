@@ -22,6 +22,11 @@ impl SplitOpenSslStream {
     pub(crate) fn shutdown(&mut self, how: Shutdown) -> std::io::Result<()> {
         self.0.lock().unwrap().inner.get_mut().shutdown(how)
     }
+
+    /// Sends a TLS `close_notify` alert to the peer, best-effort.
+    pub(crate) fn close_notify(&mut self) {
+        let _ = self.0.lock().unwrap().inner.shutdown();
+    }
 }
 
 impl Clone for SplitOpenSslStream {

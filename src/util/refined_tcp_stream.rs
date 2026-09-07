@@ -76,6 +76,20 @@ impl Stream {
             Stream::Https(ssl_stream) => ssl_stream.shutdown(how),
         }
     }
+
+    /// Best-effort TLS-level close: sends a `close_notify` alert to the peer.
+    /// No-op for plain HTTP connections.
+    fn close_notify(&mut self) {
+        match self {
+            Stream::Http(_) => {}
+            #[cfg(any(
+                feature = "ssl-openssl",
+                feature = "ssl-rustls",
+                feature = "ssl-native-tls"
+            ))]
+            Stream::Https(ssl_stream) => ssl_stream.close_notify(),
+        }
+    }
 }
 
 impl Read for Stream {
@@ -118,6 +132,7 @@ impl Write for Stream {
     }
 }
 
+#[derive(Clone)]
 pub struct RefinedTcpStream {
     stream: Stream,
     close_read: bool,
@@ -156,6 +171,17 @@ impl RefinedTcpStream {
 
     pub(crate) fn peer_addr(&mut self) -> IoResult<Option<SocketAddr>> {
         self.stream.peer_addr()
+    }
+
+    pub fn force_close_read(&mut self) {
+        let _ = self.stream.shutdown(Shutdown::Read);
+    }
+
+    pub fn force_close_write(&mut self) {
+        // Attempt a graceful TLS close (close_notify) before forcing the
+        // underlying socket shut, so HTTPS peers don't see a bare truncation.
+        self.stream.close_notify();
+        let _ = self.stream.shutdown(Shutdown::Write);
     }
 }
 

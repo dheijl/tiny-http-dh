@@ -342,29 +342,41 @@ impl Server {
                             Some(ref _ssl) => unreachable!(),
                         };
 
-                        Ok(ClientConnection::new(write_closable, read_closable))
+                        Ok((
+                            write_closable.clone(),
+                            read_closable.clone(),
+                            ClientConnection::new(write_closable, read_closable),
+                        ))
                     }
                     Err(e) => Err(e),
                 };
 
                 match new_client {
-                    Ok(client) => {
+                    Ok((mut tx, mut rx, client)) => {
                         let messages = inside_messages.clone();
                         let mut client = Some(client);
                         tasks_pool.spawn(Box::new(move || {
                             if let Some(client) = client.take() {
-                                // Synchronization is needed for HTTPS requests to avoid a deadlock
-                                if client.secure() {
-                                    let (sender, receiver) = mpsc::channel();
-                                    for rq in client {
-                                        messages.push(rq.with_notify_sender(sender.clone()).into());
+                                // Synchronization is needed for HTTPS requests to avoid a
+                                // deadlock on the single shared read/write stream.
+                                let secure = client.secure();
+                                let (sender, receiver) = mpsc::channel();
+                                let mut pending_responses = 0usize;
+                                for rq in client {
+                                    messages.push(rq.with_notify_sender(sender.clone()).into());
+                                    pending_responses += 1;
+                                    if secure {
                                         receiver.recv().unwrap();
-                                    }
-                                } else {
-                                    for rq in client {
-                                        messages.push(rq.into());
+                                        pending_responses -= 1;
                                     }
                                 }
+                                // Ensure every response, including the last one, has actually
+                                // been written before forcing the connection closed below.
+                                for _ in 0..pending_responses {
+                                    receiver.recv().unwrap();
+                                }
+                                rx.force_close_read();
+                                tx.force_close_write();
                             }
                         }));
                     }
