@@ -176,6 +176,23 @@ pub struct ServerConfig {
 
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
+
+    /// Tuning for the internal worker thread pool that dispatches accepted connections.
+    /// Defaults to [`PoolConfig::default()`] when built via `..Default::default()`,
+    /// `Server::http`, `Server::https` or `Server::http_unix`.
+    pub pool: PoolConfig,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        ServerConfig {
+            // Never bound as-is: `addr` is always overwritten by callers that use
+            // `..Default::default()`, so an empty address list is a harmless placeholder.
+            addr: ConfigListenAddr::IP(Vec::new()),
+            ssl: None,
+            pool: PoolConfig::default(),
+        }
+    }
 }
 
 /// Configuration of the server for SSL.
@@ -185,6 +202,30 @@ pub struct SslConfig {
     pub certificate: Vec<u8>,
     /// Contains the ultra-secret private key used to decode communications.
     pub private_key: Vec<u8>,
+}
+
+/// Tuning parameters for the internal worker thread pool that dispatches accepted
+/// connections.
+#[derive(Debug, Clone, Copy)]
+pub struct PoolConfig {
+    /// Minimum number of worker threads kept alive even when idle.
+    pub min_threads: usize,
+    /// Maximum number of worker threads that can be spawned to handle connections.
+    /// Once reached, further connections are queued instead of spawning new threads.
+    pub max_threads: usize,
+    /// Maximum number of tasks that can be queued once `max_threads` is reached.
+    /// Once reached, new connections are dropped rather than queued without bound.
+    pub max_queue: usize,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        PoolConfig {
+            min_threads: 4,
+            max_threads: 64,
+            max_queue: 256,
+        }
+    }
 }
 
 impl Server {
@@ -197,6 +238,7 @@ impl Server {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: None,
+            pool: PoolConfig::default(),
         })
     }
 
@@ -217,6 +259,7 @@ impl Server {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: Some(config),
+            pool: PoolConfig::default(),
         })
     }
 
@@ -229,22 +272,36 @@ impl Server {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::unix_from_path(path),
             ssl: None,
+            pool: PoolConfig::default(),
         })
     }
 
     /// Builds a new server that listens on the specified address.
     pub fn new(config: ServerConfig) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = config.addr.bind()?;
-        Self::from_listener(listener, config.ssl)
+        Self::from_listener_with_pool(listener, config.ssl, config.pool)
     }
 
     /// Builds a new server using the specified TCP listener.
     ///
     /// This is useful if you've constructed TcpListener using some less usual method
     /// such as from systemd. For other cases, you probably want the `new()` function.
+    ///
+    /// Uses the default [`PoolConfig`] for the internal worker thread pool; use
+    /// [`Server::from_listener_with_pool`] to customize it.
     pub fn from_listener<L: Into<Listener>>(
         listener: L,
         ssl_config: Option<SslConfig>,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+        Self::from_listener_with_pool(listener, ssl_config, PoolConfig::default())
+    }
+
+    /// Same as [`Server::from_listener`], but also allows tuning the internal worker
+    /// thread pool that dispatches accepted connections.
+    pub fn from_listener_with_pool<L: Into<Listener>>(
+        listener: L,
+        ssl_config: Option<SslConfig>,
+        pool_config: PoolConfig,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = listener.into();
         // building the "close" variable
@@ -310,7 +367,11 @@ impl Server {
         let inside_messages = messages.clone();
         thread::spawn(move || {
             // a tasks pool is used to dispatch the connections into threads
-            let tasks_pool = util::TaskPool::new();
+            let tasks_pool = util::TaskPool::new(
+                pool_config.min_threads,
+                pool_config.max_threads,
+                pool_config.max_queue,
+            );
 
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
@@ -355,7 +416,7 @@ impl Server {
                     Ok((mut tx, mut rx, client)) => {
                         let messages = inside_messages.clone();
                         let mut client = Some(client);
-                        tasks_pool.spawn(Box::new(move || {
+                        let accepted = tasks_pool.spawn(Box::new(move || {
                             if let Some(client) = client.take() {
                                 // Synchronization is needed for HTTPS requests to avoid a
                                 // deadlock on the single shared read/write stream.
@@ -379,6 +440,10 @@ impl Server {
                                 tx.force_close_write();
                             }
                         }));
+
+                        if !accepted {
+                            log::warn!("Task pool saturated, dropping connection");
+                        }
                     }
 
                     Err(e) => {

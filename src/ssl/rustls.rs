@@ -76,8 +76,8 @@ impl RustlsContext {
         certificates: Vec<u8>,
         private_key: Zeroizing<Vec<u8>>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let certificate_chain = rustls_pemfile::certs(&mut certificates.as_slice())
-            .collect::<Result<Vec<_>, _>>()?;
+        let certificate_chain =
+            rustls_pemfile::certs(&mut certificates.as_slice()).collect::<Result<Vec<_>, _>>()?;
 
         if certificate_chain.is_empty() {
             return Err("Couldn't extract certificate chain from config.".into());

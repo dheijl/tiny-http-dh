@@ -32,7 +32,11 @@ impl NativeTlsStream {
 
     /// Sends a TLS `close_notify` alert to the peer, best-effort.
     pub(crate) fn close_notify(&mut self) {
-        let _ = self.0.lock().expect("Failed to lock SSL stream mutex").shutdown();
+        let _ = self
+            .0
+            .lock()
+            .expect("Failed to lock SSL stream mutex")
+            .shutdown();
     }
 }
 
