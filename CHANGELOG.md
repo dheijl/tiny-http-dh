@@ -16,6 +16,8 @@
 
 * fix two CVE's (2026-66752 and 2026-66753) with the help of Claude, and cherrypick a couple of PR (#284, #285 and #290)
 
+* upgrade to Rust 2024 and current rust stable (currently rust 1.98.1)
+
 ## 0.12.0
 
 * Bumped the minimum compiler version tested by CI to 1.56 - this is necessary due to an increasing number of dependencies
