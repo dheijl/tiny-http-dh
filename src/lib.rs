@@ -235,10 +235,22 @@ impl Server {
     where
         A: ToSocketAddrs,
     {
+        Server::http_with_pool(addr, PoolConfig::default())
+    }
+
+    /// Same as [`Server::http`], but also allows tuning the internal worker thread pool.
+    #[inline]
+    pub fn http_with_pool<A>(
+        addr: A,
+        pool_config: PoolConfig,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
+    {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: None,
-            pool: PoolConfig::default(),
+            pool: pool_config,
         })
     }
 
@@ -256,10 +268,28 @@ impl Server {
     where
         A: ToSocketAddrs,
     {
+        Server::https_with_pool(addr, config, PoolConfig::default())
+    }
+
+    /// Same as [`Server::https`], but also allows tuning the internal worker thread pool.
+    #[cfg(any(
+        feature = "ssl-openssl",
+        feature = "ssl-rustls",
+        feature = "ssl-native-tls"
+    ))]
+    #[inline]
+    pub fn https_with_pool<A>(
+        addr: A,
+        config: SslConfig,
+        pool_config: PoolConfig,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
+    {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: Some(config),
-            pool: PoolConfig::default(),
+            pool: pool_config,
         })
     }
 

@@ -4,10 +4,11 @@
 
 * Made the internal worker thread pool limited by new `max_threads` and `max_queue` bounds (both configurable), with the help of Claude.
 
-  `ServerConfig` gained a new `pool: PoolConfig` field (`min_threads`, `max_threads`, `max_queue`),
-  and `Server::from_listener_with_pool` was added alongside the existing `Server::from_listener`.
-  Defaults are `min_threads: 4`, `max_threads: 64`, `max_queue: 256`, and
-  `Server::http`/`Server::https`/`Server::http_unix` are unaffected. If you construct
+  `ServerConfig` gained a new `pool: PoolConfig` field (`min_threads`, `max_threads`, `max_queue`).
+  `Server::from_listener_with_pool` was added alongside the existing `Server::from_listener`, and
+  `Server::http_with_pool`/`Server::https_with_pool` were added alongside `Server::http`/`Server::https`.
+  Defaults are `min_threads: 4`, `max_threads: 64`, `max_queue: 256`, and the existing
+  `Server::http`/`Server::https`/`Server::http_unix` shortcuts are unaffected. If you construct
   `ServerConfig` directly, add `pool: PoolConfig::default()` (or `..Default::default()`).
 
 * fix two CVE's (2026-66752 and 2026-66753) with the help of Claude, and cherrypick a couple of PR (#284, #285 and #290)
