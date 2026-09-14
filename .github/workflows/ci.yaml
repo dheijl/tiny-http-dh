@@ -12,55 +12,52 @@ jobs:
           - ssl-rustls
           - ssl-native-tls
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: rustfmt, clippy
 
-      - name: Clippy
-        uses: actions-rs/cargo@v1
+      - uses: Swatinem/rust-cache@v2
         with:
-          command: clippy
-          args: --features ${{ matrix.features }}
+          key: ${{ matrix.features }}
+
+      - name: Clippy
+        run: cargo clippy --features ${{ matrix.features }}
 
       - name: Format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: -- --check
+        run: cargo fmt -- --check
 
   test:
     name: Build & Test
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         rust:
           - stable
           - nightly
-          - 1.57
+          - "1.98.1"
         features:
           - default
           - ssl-openssl
           - ssl-rustls
           - ssl-native-tls
+    # nightly is allowed to drift/regress without failing the whole matrix
+    continue-on-error: ${{ matrix.rust == 'nightly' }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          override: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.rust }}-${{ matrix.features }}
 
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --features ${{ matrix.features }}
+        run: cargo build --features ${{ matrix.features }}
 
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features ${{ matrix.features }}
+        run: cargo test --features ${{ matrix.features }}

@@ -299,10 +299,20 @@ impl Server {
     pub fn http_unix(
         path: &std::path::Path,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+        Server::http_unix_with_pool(path, PoolConfig::default())
+    }
+
+    #[cfg(unix)]
+    #[inline]
+    /// Same as [`Server::http_unix`], but also allows tuning the internal worker thread pool.
+    pub fn http_unix_with_pool(
+        path: &std::path::Path,
+        pool_config: PoolConfig,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::unix_from_path(path),
             ssl: None,
-            pool: PoolConfig::default(),
+            pool: pool_config,
         })
     }
 
