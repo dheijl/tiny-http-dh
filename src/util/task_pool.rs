@@ -177,3 +177,129 @@ impl Drop for TaskPool {
         self.sharing.condvar.notify_all();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TaskPool;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc::channel;
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+
+    fn wait_until(mut condition: impl FnMut() -> bool, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while !condition() {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            sleep(Duration::from_millis(10));
+        }
+        true
+    }
+
+    #[test]
+    fn new_clamps_max_threads_to_at_least_one() {
+        let pool = TaskPool::new(0, 0, 0);
+        assert_eq!(pool.sharing.max_threads, 1);
+        assert_eq!(pool.sharing.min_threads, 0);
+    }
+
+    #[test]
+    fn new_clamps_min_threads_to_max_threads() {
+        let pool = TaskPool::new(10, 2, 0);
+        assert_eq!(pool.sharing.max_threads, 2);
+        assert_eq!(pool.sharing.min_threads, 2);
+    }
+
+    #[test]
+    fn spawn_runs_the_task() {
+        let pool = TaskPool::new(0, 4, 4);
+        let (tx, rx) = channel();
+
+        assert!(pool.spawn(Box::new(move || tx.send(()).unwrap())));
+
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("spawned task did not run");
+    }
+
+    #[test]
+    fn spawn_queues_tasks_once_max_threads_is_reached() {
+        let pool = TaskPool::new(0, 1, 4);
+        let (started_tx, started_rx) = channel();
+        let (release_tx, release_rx) = channel::<()>();
+
+        // occupies the pool's single worker thread until released
+        assert!(pool.spawn(Box::new(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        })));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("first task did not start");
+
+        // the pool is saturated (1/1 threads busy, none idle): this must be
+        // queued rather than spawning a second thread past max_threads
+        let (second_tx, second_rx) = channel();
+        assert!(pool.spawn(Box::new(move || second_tx.send(()).unwrap())));
+        assert!(
+            second_rx.recv_timeout(Duration::from_millis(100)).is_err(),
+            "queued task ran before the worker thread was freed"
+        );
+
+        // freeing the worker thread should let it pick up the queued task
+        release_tx.send(()).unwrap();
+        second_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queued task did not run once the worker thread was freed");
+    }
+
+    #[test]
+    fn spawn_rejects_tasks_once_the_queue_is_full() {
+        let pool = TaskPool::new(0, 1, 1);
+        let (started_tx, started_rx) = channel();
+        let (release_tx, release_rx) = channel::<()>();
+
+        // occupies the pool's single worker thread until released
+        assert!(pool.spawn(Box::new(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        })));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("first task did not start");
+
+        // fills the one available queue slot (max_queue = 1)
+        assert!(pool.spawn(Box::new(|| {})));
+
+        // the queue is now full: further tasks must be rejected, not queued
+        assert!(!pool.spawn(Box::new(|| {})));
+
+        release_tx.send(()).unwrap();
+    }
+
+    #[test]
+    fn drop_makes_idle_threads_exit_promptly() {
+        let pool = TaskPool::new(2, 2, 4);
+        let sharing = pool.sharing.clone();
+
+        assert!(
+            wait_until(
+                || sharing.active_tasks.load(Ordering::Acquire) >= 2,
+                Duration::from_secs(1)
+            ),
+            "min_threads worker threads did not start"
+        );
+
+        drop(pool);
+
+        // before the `shutdown` flag was added, idle threads only noticed
+        // teardown after their up-to-5s wait_timeout expired
+        assert!(
+            wait_until(
+                || sharing.active_tasks.load(Ordering::Acquire) == 0,
+                Duration::from_secs(1)
+            ),
+            "idle worker threads did not exit promptly after Drop"
+        );
+    }
+}
