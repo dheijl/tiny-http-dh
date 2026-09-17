@@ -10,7 +10,7 @@ Its main objectives are to be 100% compliant with the HTTP standard and to provi
 
 `tiny-http-dh` is [dheijl](https://github.com/dheijl)'s maintained fork of the original [tiny-http](https://github.com/tiny-http/tiny-http), which is no longer actively maintained. It is not published on crates.io. See [CHANGELOG.md](CHANGELOG.md) for what has diverged from upstream (CVE fixes, a configurable worker thread pool, Rust 2024 edition, dependency updates, etc.).
 
-What does **tiny-http** handle?
+## What does **tiny-http** handle?
 
 - Accepting and managing connections to the clients
 - Parsing requests
@@ -53,6 +53,36 @@ for request in server.incoming_requests() {
     request.respond(response);
 }
 ```
+
+You can refer to the original [tiny-http docs](https://docs.rs/tiny_http/latest/tiny_http/) for more details.
+
+### Worker thread pool configuration
+
+The existing API is unchanged, but there are 3 new `tiny_http_dh` methods that take a `PoolConfig` parameter: `Server::http_with_pool`/`Server::https_with_pool`/`Server::http_unix_with_pool`, in addition to the original `Server::http`/`Server::https`/`Server::http_unix`.
+
+```rust
+use tiny_http_dh::{PoolConfig, Server};
+
+let server = Server::http_with_pool(
+    "0.0.0.0:8000",
+    PoolConfig {
+        min_threads: 4,
+        max_threads: 32,
+        max_queue: 128,
+    },
+).unwrap();
+```
+
+`PoolConfig` also implements `Default` (`min_threads: 4`, `max_threads: 64`, `max_queue: 256`), so you can start from that and only override what you need:
+
+```rust
+let server = Server::http_with_pool(
+    "0.0.0.0:8000",
+    PoolConfig { max_threads: 32, ..Default::default() },
+).unwrap();
+```
+
+Once `max_threads` is reached, further connections are queued; once `max_queue` is also reached, **new connections are dropped** rather than queued without bound. Size `max_queue` for the burst traffic you expect.
 
 ## Speed
 
