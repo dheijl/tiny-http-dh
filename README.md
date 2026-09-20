@@ -32,7 +32,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http_dh = "0.12.1"
+tiny_http_dh = "0.12.2"
 ```
 
 ## Usage
