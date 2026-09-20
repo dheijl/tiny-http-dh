@@ -1,6 +1,10 @@
 # Changes
 
-## 0.12.1 (Unreleased)
+## 0.12.2 (Sept 20, 2026 dheijl)
+
+* publish on crates.io
+
+## 0.12.1 (Sept 20, 2026 dheijl)
 
 * minor optimization
 

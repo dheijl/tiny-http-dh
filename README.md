@@ -8,7 +8,7 @@ Its main objectives are to be 100% compliant with the HTTP standard and to provi
 
 ## About this fork
 
-`tiny-http-dh` is [dheijl](https://github.com/dheijl)'s maintained fork of the original [tiny-http](https://github.com/tiny-http/tiny-http), which is no longer actively maintained. It is not published on crates.io. See [CHANGELOG.md](CHANGELOG.md) for what has diverged from upstream (CVE fixes, a configurable worker thread pool, Rust 2024 edition, dependency updates, etc.).
+`tiny-http-dh` is [dheijl](https://github.com/dheijl)'s maintained fork of the original [tiny-http](https://github.com/tiny-http/tiny-http), which is no longer actively maintained. See [CHANGELOG.md](CHANGELOG.md) for what has diverged from upstream (CVE fixes, a configurable worker thread pool, Rust 2024 edition, dependency updates, etc.).
 
 ## What does **tiny-http** handle?
 
@@ -32,7 +32,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http_dh = { git = "https://github.com/dheijl/tiny-http-dh" }
+tiny_http_dh = "0.12.1"
 ```
 
 ## Usage

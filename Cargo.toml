@@ -1,7 +1,11 @@
 [package]
 name = "tiny_http_dh"
-version = "0.12.1"
-authors = ["pierre.krieger1708@gmail.com", "Corey Farwell <coreyf@rwell.org>", "Danny Heijl <danny.heijl@telenet.be>"]
+version = "0.12.2"
+authors = [
+    "pierre.krieger1708@gmail.com",
+    "Corey Farwell <coreyf@rwell.org>",
+    "Danny Heijl <danny.heijl@telenet.be>",
+]
 description = "Low level HTTP server library, maintained fork of tiny-http with CVE fixes and a configurable worker thread pool"
 documentation = "https://docs.rs/tiny_http_dh"
 keywords = ["http", "server", "web"]
