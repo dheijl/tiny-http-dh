@@ -81,7 +81,7 @@ impl ClientConnection {
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
     fn read_next_line(&mut self) -> IoResult<AsciiString> {
-        let mut buf = Vec::new();
+        let mut buf = Vec::with_capacity(64);
         let mut prev_byte_was_cr = false;
 
         loop {
@@ -123,7 +123,7 @@ impl ClientConnection {
 
             // getting all headers
             let headers = {
-                let mut headers = Vec::new();
+                let mut headers = Vec::with_capacity(8);
                 loop {
                     let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
 

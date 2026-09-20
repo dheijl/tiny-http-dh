@@ -380,7 +380,7 @@ where
             match (self.data_length, transfer_encoding) {
                 (Some(l), _) => (Box::new(self.reader), Some(l)),
                 (None, Some(TransferEncoding::Identity)) => {
-                    let mut buf = Vec::new();
+                    let mut buf = Vec::with_capacity(128);
                     self.reader.read_to_end(&mut buf)?;
                     let l = buf.len();
                     (Box::new(Cursor::new(buf)), Some(l))

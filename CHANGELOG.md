@@ -2,6 +2,8 @@
 
 ## 0.12.1 (Unreleased)
 
+* minor optimization
+
 * update CI
 
 * Made the internal worker thread pool limited by new `max_threads` and `max_queue` bounds (both configurable), with the help of Claude.
