@@ -1,5 +1,9 @@
 # Changes
 
+## 0.12.3 (Oct 25, 2026 dheijl)
+
+* apply tiny_http PR#291 to the modified spawn logic in this fork too
+
 ## 0.12.2 (Sept 20, 2026 dheijl)
 
 * publish on crates.io

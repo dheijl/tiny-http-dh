@@ -96,8 +96,20 @@ impl TaskPool {
     /// is returned so the caller can react (e.g. by closing the connection it came from).
     pub fn spawn(&self, code: Box<dyn FnOnce() + Send>) -> bool {
         let mut queue = self.sharing.todo.lock().unwrap();
+        self.dispatch(&mut queue, code)
+    }
 
-        let no_thread_idle = self.sharing.waiting_tasks.load(Ordering::Acquire) == 0;
+    fn dispatch(
+        &self,
+        queue: &mut VecDeque<Box<dyn FnOnce() + Send>>,
+        code: Box<dyn FnOnce() + Send>,
+    ) -> bool {
+        // Jobs already sitting in the queue reserve an idle worker just as much as this
+        // one would: a woken worker only decrements `waiting_tasks` once it actually runs,
+        // so a burst of spawns can read the same stale idle count repeatedly and believe
+        // each of them has a worker free. Counting queued jobs against that count avoids
+        // handing out the same idle worker to more than one job in the burst.
+        let no_thread_idle = self.sharing.waiting_tasks.load(Ordering::Acquire) <= queue.len();
         let below_max =
             self.sharing.active_tasks.load(Ordering::Acquire) < self.sharing.max_threads;
 
@@ -183,6 +195,7 @@ mod tests {
     use super::TaskPool;
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::channel;
+    use std::sync::{Arc, Condvar, Mutex};
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
@@ -275,6 +288,68 @@ mod tests {
         assert!(!pool.spawn(Box::new(|| {})));
 
         release_tx.send(()).unwrap();
+    }
+
+    #[test]
+    fn a_burst_of_blocking_jobs_does_not_reserve_an_idle_worker_twice() {
+        let min_threads = 4;
+        let pool = TaskPool::new(min_threads, min_threads + 4, 10);
+
+        assert!(
+            wait_until(
+                || pool.sharing.waiting_tasks.load(Ordering::Acquire) == min_threads,
+                Duration::from_secs(1)
+            ),
+            "min_threads worker threads did not become idle"
+        );
+
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let (started_tx, started_rx) = channel();
+
+        // Holds the queue lock for the whole burst, which is a valid schedule of
+        // consecutive spawn calls: it forces every dispatch in the burst to see the
+        // same `waiting_tasks` count, the way a fast caller can in practice before any
+        // woken worker actually runs and decrements it.
+        let mut queue = pool.sharing.todo.lock().unwrap();
+        for _ in 0..(min_threads + 2) {
+            let started_tx = started_tx.clone();
+            let release = release.clone();
+            pool.dispatch(
+                &mut queue,
+                Box::new(move || {
+                    started_tx.send(()).unwrap();
+                    let (lock, condvar) = &*release;
+                    let mut released = lock.lock().unwrap();
+                    while !*released {
+                        released = condvar.wait(released).unwrap();
+                    }
+                }),
+            );
+        }
+        drop(queue);
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut count = 0;
+        while count < min_threads + 2 {
+            if started_rx
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .is_err()
+            {
+                break;
+            }
+            count += 1;
+        }
+
+        // Always unblock the workers, including when the assertion below fails.
+        let (lock, condvar) = &*release;
+        *lock.lock().unwrap() = true;
+        condvar.notify_all();
+
+        assert_eq!(
+            count,
+            min_threads + 2,
+            "queued jobs were starved by the burst"
+        );
     }
 
     #[test]
