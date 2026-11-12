@@ -181,7 +181,18 @@ pub struct ServerConfig {
     /// Defaults to [`PoolConfig::default()`] when built via `..Default::default()`,
     /// `Server::http`, `Server::https` or `Server::http_unix`.
     pub pool: PoolConfig,
+
+    /// How long a new connection may take to complete its TLS handshake before it is
+    /// dropped. `None` disables the timeout. Only used when `ssl` is set.
+    /// Defaults to [`DEFAULT_TLS_HANDSHAKE_TIMEOUT`].
+    ///
+    /// The handshake runs on a worker thread of the pool, so a peer that connects and
+    /// stays silent holds one worker for at most this long.
+    pub tls_handshake_timeout: Option<Duration>,
 }
+
+/// Default value of [`ServerConfig::tls_handshake_timeout`].
+pub const DEFAULT_TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -191,6 +202,7 @@ impl Default for ServerConfig {
             addr: ConfigListenAddr::IP(Vec::new()),
             ssl: None,
             pool: PoolConfig::default(),
+            tls_handshake_timeout: Some(DEFAULT_TLS_HANDSHAKE_TIMEOUT),
         }
     }
 }
@@ -251,6 +263,7 @@ impl Server {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: None,
             pool: pool_config,
+            ..Default::default()
         })
     }
 
@@ -290,6 +303,7 @@ impl Server {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: Some(config),
             pool: pool_config,
+            ..Default::default()
         })
     }
 
@@ -313,13 +327,19 @@ impl Server {
             addr: ConfigListenAddr::unix_from_path(path),
             ssl: None,
             pool: pool_config,
+            ..Default::default()
         })
     }
 
     /// Builds a new server that listens on the specified address.
     pub fn new(config: ServerConfig) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = config.addr.bind()?;
-        Self::from_listener_with_pool(listener, config.ssl, config.pool)
+        Self::from_listener_with_options(
+            listener,
+            config.ssl,
+            config.pool,
+            config.tls_handshake_timeout,
+        )
     }
 
     /// Builds a new server using the specified TCP listener.
@@ -342,6 +362,22 @@ impl Server {
         listener: L,
         ssl_config: Option<SslConfig>,
         pool_config: PoolConfig,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+        Self::from_listener_with_options(
+            listener,
+            ssl_config,
+            pool_config,
+            Some(DEFAULT_TLS_HANDSHAKE_TIMEOUT),
+        )
+    }
+
+    /// Same as [`Server::from_listener_with_pool`], but also allows setting the TLS
+    /// handshake timeout (see [`ServerConfig::tls_handshake_timeout`]).
+    pub fn from_listener_with_options<L: Into<Listener>>(
+        listener: L,
+        ssl_config: Option<SslConfig>,
+        pool_config: PoolConfig,
+        tls_handshake_timeout: Option<Duration>,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = listener.into();
         // building the "close" variable
@@ -405,6 +441,14 @@ impl Server {
 
         let inside_close_trigger = close_trigger.clone();
         let inside_messages = messages.clone();
+        // shared with the per-connection tasks, which perform the TLS handshake
+        let ssl = ssl.map(Arc::new);
+        #[cfg(not(any(
+            feature = "ssl-openssl",
+            feature = "ssl-rustls",
+            feature = "ssl-native-tls"
+        )))]
+        let _ = tls_handshake_timeout;
         thread::spawn(move || {
             // a tasks pool is used to dispatch the connections into threads
             let tasks_pool = util::TaskPool::new(
@@ -415,70 +459,84 @@ impl Server {
 
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
-                let new_client = match server.accept() {
+                match server.accept() {
                     Ok((sock, _)) => {
-                        use util::RefinedTcpStream;
-                        let (read_closable, write_closable) = match ssl {
-                            None => RefinedTcpStream::new(sock),
-                            #[cfg(any(
-                                feature = "ssl-openssl",
-                                feature = "ssl-rustls",
-                                feature = "ssl-native-tls"
-                            ))]
-                            Some(ref ssl) => {
-                                // trying to apply SSL over the connection
-                                // if an error occurs, we just close the socket and resume listening
-                                let sock = match ssl.accept(sock) {
-                                    Ok(s) => s,
-                                    Err(_) => continue,
-                                };
-
-                                RefinedTcpStream::new(sock)
-                            }
-                            #[cfg(not(any(
-                                feature = "ssl-openssl",
-                                feature = "ssl-rustls",
-                                feature = "ssl-native-tls"
-                            )))]
-                            Some(ref _ssl) => unreachable!(),
-                        };
-
-                        Ok((
-                            write_closable.clone(),
-                            read_closable.clone(),
-                            ClientConnection::new(write_closable, read_closable),
-                        ))
-                    }
-                    Err(e) => Err(e),
-                };
-
-                match new_client {
-                    Ok((mut tx, mut rx, client)) => {
                         let messages = inside_messages.clone();
-                        let mut client = Some(client);
+                        let ssl = ssl.clone();
+                        let mut sock = Some(sock);
                         let accepted = tasks_pool.spawn(Box::new(move || {
-                            if let Some(client) = client.take() {
-                                // Synchronization is needed for HTTPS requests to avoid a
-                                // deadlock on the single shared read/write stream.
-                                let secure = client.secure();
-                                let (sender, receiver) = mpsc::channel();
-                                let mut pending_responses = 0usize;
-                                for rq in client {
-                                    messages.push(rq.with_notify_sender(sender.clone()).into());
-                                    pending_responses += 1;
-                                    if secure {
-                                        receiver.recv().unwrap();
-                                        pending_responses -= 1;
+                            let sock = match sock.take() {
+                                Some(sock) => sock,
+                                None => return,
+                            };
+
+                            use util::RefinedTcpStream;
+                            let (read_closable, write_closable) = match ssl.as_deref() {
+                                None => RefinedTcpStream::new(sock),
+                                #[cfg(any(
+                                    feature = "ssl-openssl",
+                                    feature = "ssl-rustls",
+                                    feature = "ssl-native-tls"
+                                ))]
+                                Some(ssl) => {
+                                    // The handshake blocks until the peer speaks, so it must
+                                    // not run in the accept thread: a peer that connects and
+                                    // stays silent would stop the server from accepting anyone
+                                    // else. The timeout keeps such a peer from holding this
+                                    // worker forever.
+                                    let timeouts = match sock.try_clone() {
+                                        Ok(timeouts) => timeouts,
+                                        Err(_) => return,
+                                    };
+                                    if timeouts.set_timeouts(tls_handshake_timeout).is_err() {
+                                        return;
                                     }
+
+                                    // if an error occurs, we just close the socket
+                                    let sock = match ssl.accept(sock) {
+                                        Ok(s) => s,
+                                        Err(_) => return,
+                                    };
+
+                                    // established connections keep their previous behaviour
+                                    if timeouts.set_timeouts(None).is_err() {
+                                        return;
+                                    }
+
+                                    RefinedTcpStream::new(sock)
                                 }
-                                // Ensure every response, including the last one, has actually
-                                // been written before forcing the connection closed below.
-                                for _ in 0..pending_responses {
+                                #[cfg(not(any(
+                                    feature = "ssl-openssl",
+                                    feature = "ssl-rustls",
+                                    feature = "ssl-native-tls"
+                                )))]
+                                Some(_ssl) => unreachable!(),
+                            };
+
+                            let mut tx = write_closable.clone();
+                            let mut rx = read_closable.clone();
+                            let client = ClientConnection::new(write_closable, read_closable);
+
+                            // Synchronization is needed for HTTPS requests to avoid a
+                            // deadlock on the single shared read/write stream.
+                            let secure = client.secure();
+                            let (sender, receiver) = mpsc::channel();
+                            let mut pending_responses = 0usize;
+                            for rq in client {
+                                messages.push(rq.with_notify_sender(sender.clone()).into());
+                                pending_responses += 1;
+                                if secure {
                                     receiver.recv().unwrap();
+                                    pending_responses -= 1;
                                 }
-                                rx.force_close_read();
-                                tx.force_close_write();
                             }
+                            // Ensure every response, including the last one, has actually
+                            // been written before forcing the connection closed below.
+                            for _ in 0..pending_responses {
+                                receiver.recv().unwrap();
+                            }
+                            rx.force_close_read();
+                            tx.force_close_write();
                         }));
 
                         if !accepted {

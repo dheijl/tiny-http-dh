@@ -1,6 +1,6 @@
 [package]
 name = "tiny_http_dh"
-version = "0.12.3"
+version = "0.12.4"
 authors = [
     "pierre.krieger1708@gmail.com",
     "Corey Farwell <coreyf@rwell.org>",

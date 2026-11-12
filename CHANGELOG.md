@@ -1,5 +1,24 @@
 # Changes
 
+## 0.12.4 (Nov 12, 2026 dheijl)
+
+* apply tiny_http PR#293 (run the TLS handshake outside the accept thread) to the modified spawn logic in this fork, with the help of Claude.
+
+  Previously a peer that opened a TCP connection to an HTTPS server and never started its TLS
+  handshake stopped the server from accepting any other connection until it went away. The
+  handshake now runs on a pool worker thread and is bounded by a timeout, so a silent peer holds
+  one worker for at most that long. Plain HTTP and UNIX socket servers are unaffected.
+
+  `ServerConfig` gained a new `tls_handshake_timeout: Option<Duration>` field, defaulting to
+  `DEFAULT_TLS_HANDSHAKE_TIMEOUT` (30 seconds); `None` disables the timeout.
+  `Server::from_listener_with_options` was added alongside `Server::from_listener_with_pool` to set
+  it when building from an existing listener. The `Server::http`/`Server::https`/`*_with_pool`
+  shortcuts are unaffected. If you construct `ServerConfig` directly, add
+  `tls_handshake_timeout: Some(DEFAULT_TLS_HANDSHAKE_TIMEOUT)` (or `..Default::default()`).
+
+* with `ssl-rustls`, the TLS handshake now completes before the connection is handed over, like
+  the other backends, so the handshake timeout applies to it too.
+
 ## 0.12.3 (Oct 25, 2026 dheijl)
 
 * apply tiny_http PR#291 to the modified spawn logic in this fork too

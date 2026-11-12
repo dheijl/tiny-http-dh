@@ -96,9 +96,17 @@ impl RustlsContext {
 
     pub(crate) fn accept(
         &self,
-        stream: Connection,
+        mut stream: Connection,
     ) -> Result<RustlsStream, Box<dyn Error + Send + Sync + 'static>> {
-        let connection = rustls::ServerConnection::new(self.0.clone())?;
+        let mut connection = rustls::ServerConnection::new(self.0.clone())?;
+        // Complete the handshake now rather than lazily on the first read, like the other
+        // backends do, so that the caller's handshake timeout applies to it.
+        while connection.is_handshaking() {
+            let (read, written) = connection.complete_io(&mut stream)?;
+            if read == 0 && written == 0 {
+                return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
+            }
+        }
         Ok(RustlsStream(Arc::new(Mutex::new(
             rustls::StreamOwned::new(connection, stream),
         ))))
